@@ -50,6 +50,7 @@ const AssessmentModal = ({ open, onClose, data }) => {
 
   const currentItem = items[currentIndex];
   const result = currentItem.azureResult;
+  const overall=result?.pronunciationScores?.overall;
   const hasError = !!currentItem.error || !!result?.error;
   const scores = items[currentIndex]?.azureResult?.
 rawJsonResult?.NBest[0]?.
@@ -223,10 +224,10 @@ console.log("scores",scores)
                   <div style={{ position: "relative", display: "inline-flex" }}>
                     <CircularProgress
                       variant="determinate"
-                      value={scores?.overall ?? 0}
+                      value={overall ?? 0}
                       size={100}
                       thickness={5}
-                      style={{ color: getColor(scores?.overall ?? 0) }}
+                      style={{ color: getColor(overall ?? 0) }}
                     />
                     <div
                       style={{
@@ -239,7 +240,7 @@ console.log("scores",scores)
                         color: "black",
                       }}
                     >
-                      {Math.round(scores?.overall ?? 0)}
+                      {Math.round(overall ?? 0)}
                     </div>
                   </div>
                   <div style={{ marginTop: 8, fontWeight: "bold", color: "#333" }}>
