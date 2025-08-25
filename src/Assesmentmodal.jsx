@@ -42,9 +42,50 @@ const AssessmentModal = ({ open, onClose, data }) => {
   const [autoPlay, setAutoPlay] = useState(false);
   const audioRef = useRef(null);
 
-  const items = Object.keys(data)
+ const items = [
+  { 
+    type: "Average", 
+    title: "👋 Hello", 
+    text: "Welcome to your reading assessment!" 
+  }, 
+  ...Object.keys(data)
     .filter((key) => !isNaN(Number(key)))
-    .map((key) => data[key]);
+    .map((key) => data[key])
+];
+const allScores = items?.map(item => ({
+  accuracy: item?.azureResult?.pronunciationScores?.accuracy || 0,
+  fluency: item?.azureResult?.pronunciationScores?.fluency || 0,
+  completeness: item?.azureResult?.pronunciationScores?.completeness || 0,
+  overall: item?.azureResult?.pronunciationScores?.overall || 0
+}));
+
+// number of pages
+const count = allScores?.length-1|| 1;
+
+// sum everything
+const totals = allScores?.reduce(
+  (acc, score) => {
+    acc.accuracy += score.accuracy;
+    acc.fluency += score.fluency;
+    acc.completeness += score.completeness;
+    acc.overall += score.overall;
+    return acc;
+  },
+  { accuracy: 0, fluency: 0, completeness: 0, overall: 0 }
+);
+
+// calculate averages
+const averages = {
+  accuracy: (totals.accuracy / count).toFixed(2),
+  fluency: (totals.fluency / count).toFixed(2),
+  completeness: (totals.completeness / count).toFixed(2),
+  overall: (totals.overall / count).toFixed(2)
+};
+
+// console.log("All Scores:", allScores);
+console.log("Averages:", averages);
+
+
 
   if (!open || !data || items.length === 0) return null;
 
@@ -55,7 +96,20 @@ const AssessmentModal = ({ open, onClose, data }) => {
   const scores = items[currentIndex]?.azureResult?.
 rawJsonResult?.NBest[0]?.
 PronunciationAssessment;
-console.log("scores",scores)
+console.log(JSON.stringify( scores),"scores")
+const AverageProsody =
+  items.reduce((acc, item) => {
+    const score =
+      item?.azureResult?.rawJsonResult?.NBest?.[0]?.PronunciationAssessment?.ProsodyScore;
+    return acc + (score ?? 0); // agar undefined ho to 0 lelo
+  }, 0) / items.length;
+
+console.log("Average Prosody:", AverageProsody);
+
+
+
+
+//console.log("scores",scores)
   const raw = result?.rawJsonResult;
   const words = raw?.NBest?.[0]?.Words || [];
   const confidence = raw?.NBest?.[0]?.Confidence ?? 0;
@@ -144,6 +198,10 @@ console.log("scores",scores)
     (w) => (w?.PronunciationAssessment?.AccuracyScore ?? 100) < mispronunciationThreshold
   );
 
+  function Roundoff(decimalVal)
+  {
+    return Math.round(decimalVal);
+  }
   // Long pause count (gap in milliseconds > 700)
   let longPauseCount = 0;
   for (let i = 1; i < spokenWordsRaw.length; i++) {
@@ -151,7 +209,7 @@ console.log("scores",scores)
     const currStart = spokenWordsRaw[i].Offset;
     if ((currStart - prevEnd) / 10000 > 700) longPauseCount++;
   }
-
+// alert(data.title)
   // === Word-level playback ===
   const playWord = (wordObj) => {
     if (!audioRef.current || !wordObj) return;
@@ -177,180 +235,104 @@ console.log("scores",scores)
     audio.addEventListener("timeupdate", stopListener);
   };
 
-  return (
-    <Modal open={open} onClose={onClose}>
-      <Box sx={modalStyle}>
-        <div style={headerStyle}>
-          📝 Page{" "}
-          {isSequential
-            ? currentItem.recording_page + 1
-            : currentItem.recording_page === 0
-            ? 1
-            : currentItem.recording_page}
-        </div>
 
-        <div style={bodyStyle}>
-          <p style={paragraphStyle}>
-            <strong>File:</strong> {data.title}
-          </p>
+return (
+  <Modal open={open} onClose={onClose}>
+    <Box sx={modalStyle}>
+      {currentItem.type === "Average" ? (
+        <>
+          <div style={headerStyle}>{data.title}</div>
+        <div>
+            <h3 style={{marginLeft:"10px"}}>Pronounciation score</h3>
+          <div style={{display:"flex", gap:"60px", marginLeft:"10px"}}>
+           <div>
+  <p>
+    Accuracy: <span style={{ color: getColor(averages.accuracy) }}>{Roundoff(averages.accuracy)}%</span>
+  </p>
+  <p>
+    Fluency: <span style={{ color: getColor(averages.fluency) }}>{Roundoff(averages.fluency)}%</span>
+  </p>
+</div>
 
-          <AudioPlayer
-            ref={audioRef}
-            src={currentItem.recordingURL}
-            showJumpControls={false}
-            layout="horizontal"
-            autoPlay={autoPlay}
-            onEnded={handleEnd}
-            style={{
-              marginBottom: 20,
-              width: "100%",
-              borderRadius: 10,
-              padding: 10,
-              background: "linear-gradient(90deg, #e3f2fd, #1692f9ff)",
-              boxShadow: "0px 3px 10px rgba(25, 118, 210, 0.2)",
-              border: "1px solid #198eeeff",
-            }}
-          />
+           <div>
+  <p>
+    Completeness:{" "}
+    <span style={{ color: getColor(averages.completeness) }}>
+      {Roundoff(averages.completeness)}%
+    </span>
+  </p>
 
-          {hasError ? (
-            <p style={{ color: "#d32f2f", fontWeight: "bold" }}>
-              ❌ Unable to evaluate this recording.
-            </p>
-          ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-                {/* Circular Pronunciation Score */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ position: "relative", display: "inline-flex" }}>
-                    <CircularProgress
-                      variant="determinate"
-                      value={overall ?? 0}
-                      size={100}
-                      thickness={5}
-                      style={{ color: getColor(overall ?? 0) }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        fontWeight: "bold",
-                        fontSize: "20px",
-                        color: "black",
-                      }}
-                    >
-                      {Math.round(overall ?? 0)}
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 8, fontWeight: "bold", color: "#333" }}>
-                    Pronunciation Score
-                  </div>
-                  <div style={{ marginTop: 12, fontSize: "13px", color: "#555", lineHeight: "1.8" }}>
-                    <div>
-                      <span style={{ color: "#c62828", fontWeight: "bold", fontSize: "20px" }}>●</span> 0–39
-                    </div>
-                    <div>
-                      <span style={{ color: "#f9a825", fontWeight: "bold", fontSize: "20px" }}>●</span> 40–79
-                    </div>
-                    <div>
-                      <span style={{ color: "#2e7d32", fontWeight: "bold", fontSize: "20px" }}>●</span> 80–100
-                    </div>
-                  </div>
-                </div>
+  <p>
+    Prosody:{" "}
+    <span style={{ color: getColor(AverageProsody) }}>
+      {Roundoff(AverageProsody)}%
+    </span>
+  </p>
+</div>
 
-                {/* Bars */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px", flex: 1 }}>
-                  {[
-                    { label: "Accuracy", value: scores?.AccuracyScore ?? 0 },
-                    { label: "Prosody", value: Math.round(scores?.ProsodyScore) ?? 0 },
-                    { label: "Fluency", value: scores?.FluencyScore?? 0 },
-                    { label: "Completeness", value: scores?.CompletenessScore ?? 0 },
-                  ].map(({ label, value }) => (
-                    <div key={label}>
-                      <div style={labelStyle}>{label}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ ...barWrapper, flex: 1 }}>
-                          <div style={bar(value)} />
-                        </div>
-                        <div style={{ minWidth: 45, textAlign: "right", fontWeight: 500 }}>{value}/100</div>
+             <div style={{ position: "relative", display: "inline-flex" }}>
+                      <CircularProgress
+                        variant="determinate"
+                        value={averages?.overall ?? 0}
+                        size={100}
+                        thickness={10}
+                        style={{ color: getColor(averages?.overall ?? 0) }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          fontWeight: "bold",
+                          fontSize: "20px",
+                          color: "black",
+                        }}
+                      >
+                        {Roundoff(averages?.overall ?? 0)}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {alignedResults.length > 0 && (
-                <div style={{ marginTop: 24 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}>
-                    Word-Level Comparison (click a word to play it)
-                  </h3>
-
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 20, marginBottom: 20 }}>
-                    <div style={{ color: "#d32f2f", fontWeight: "bold" }}>
-                      ❗ Mispronunciations: {mispronunciations.length}
+                    <div >
+                      <div>
+                        <span style={{ color: "#c62828", fontWeight: "bold", fontSize: "20px" }}>●</span> 0–39
+                      </div>
+                      <div>
+                        <span style={{ color: "#f9a825", fontWeight: "bold", fontSize: "20px" }}>●</span> 40–79
+                      </div>
+                      <div>
+                        <span style={{ color: "#2e7d32", fontWeight: "bold", fontSize: "20px" }}>●</span> 80–100
+                      </div>
                     </div>
-                    <div style={{ color: "#f57c00", fontWeight: "bold" }}>
-                      ⏸️ Long Pauses: {longPauseCount}
-                    </div>
-                  </div>
+          </div>
+          <div style={{ width: "90%", height: "200px", margin: "auto", padding: "10px", overflow: "auto",  }}>
+  <h3 style={{ margin: "10px" }}>Page Level Details</h3>
 
-                  <div style={{ display: "flex", flexWrap: "wrap" }}>
-                    {alignedResults.map((w, i) => {
-                      const prevWord = spokenWordsRaw[w.spokenIndex - 1];
-                      const currWord = spokenWordsRaw[w.spokenIndex];
-                      let hasLongPause = false;
-                      if (prevWord && currWord) {
-                        const prevEnd = prevWord.Offset + prevWord.Duration;
-                        const currStart = currWord.Offset;
-                        hasLongPause = (currStart - prevEnd) / 10000 > 700;
-                      }
+  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <thead>
+      <tr>
+        <th style={{ textAlign: "left", padding: "8px" }}>Page</th>
+        <th style={{ textAlign: "left", padding: "8px" }}>Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {items.slice(1).map((item, idx) => (
+        <tr key={idx}>
+          <td style={{ padding: "8px" }}>
+  {isSequential
+    ? idx + 1   // sequential me hamesha index+1
+    : (item.recording_page === 0 ? 1 : item.recording_page)} 
+</td>
 
-                      const clickable = w.spokenIndex !== -1 && spokenWordsRaw[w.spokenIndex];
+          <td style={{ padding: "8px" }}>
+            {Roundoff(item?.azureResult?.pronunciationScores?.overall ?? 0)}%
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
 
-                      return (
-                        <React.Fragment key={`${w.word}-${i}`}>
-                          {hasLongPause && (
-                            <div
-                              style={{
-                                padding: "4px 8px",
-                                backgroundColor: "#ffecb3",
-                                color: "#5a6452ff",
-                                borderRadius: "4px",
-                                margin: "4px",
-                                fontWeight: "bold",
-                              }}
-                              title="⏸ Long pause before this word (over 700ms gap)"
-                            >
-                              ⏸
-                            </div>
-                          )}
-                          <div
-                            onClick={() => clickable && playWord(spokenWordsRaw[w.spokenIndex])}
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                              margin: "4px",
-                              backgroundColor: getColor(w.accuracy, "light"),
-                              color: getColor(w.accuracy, "dark"),
-                              cursor: clickable ? "pointer" : "default",
-                              opacity: clickable ? 1 : 0.7,
-                            }}
-                            title={`Word: ${w.word}\nAccuracy: ${w.accuracy || 0}${
-                              clickable ? "\n(Click to play this word)" : ""
-                            }`}
-                          >
-                            {w.word}
-                            {w.accuracy ? ` (${w.accuracy})` : ""}
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+        </div>
 
           <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
             <Button variant="outlined" onClick={handlePrevious} disabled={currentIndex === 0}>
@@ -370,10 +352,207 @@ console.log("scores",scores)
               </Button>
             </div>
           </div>
-        </div>
-      </Box>
-    </Modal>
-  );
+        </>
+      ) : (
+        <>
+          <div style={headerStyle}>
+            📝 Page{" "}
+            {isSequential
+              ? currentItem.recording_page + 1
+              : currentItem.recording_page === 0
+              ? 1
+              : currentItem.recording_page}
+          </div>
+
+          <div style={bodyStyle}>
+            <p style={paragraphStyle}>
+              <strong>File:</strong> {data.title}
+            </p>
+
+            <AudioPlayer
+              ref={audioRef}
+              src={currentItem.recordingURL}
+              showJumpControls={false}
+              layout="horizontal"
+              autoPlay={autoPlay}
+              onEnded={handleEnd}
+              style={{
+                marginBottom: 20,
+                width: "100%",
+                borderRadius: 10,
+                padding: 10,
+                background: "linear-gradient(90deg, #e3f2fd, #1692f9ff)",
+                boxShadow: "0px 3px 10px rgba(25, 118, 210, 0.2)",
+                border: "1px solid #198eeeff",
+              }}
+            />
+
+            {hasError ? (
+              <p style={{ color: "#d32f2f", fontWeight: "bold" }}>
+                ❌ Unable to evaluate this recording.
+              </p>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
+                  {/* Circular Pronunciation Score */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ position: "relative", display: "inline-flex" }}>
+                      <CircularProgress
+                        variant="determinate"
+                        value={overall ?? 0}
+                        size={100}
+                        thickness={5}
+                        style={{ color: getColor(overall ?? 0) }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          fontWeight: "bold",
+                          fontSize: "20px",
+                          color: "black",
+                        }}
+                      >
+                        {Roundoff(overall ?? 0)}
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 8, fontWeight: "bold", color: "#333" }}>
+                      Pronunciation Score
+                    </div>
+                    <div style={{ marginTop: 12, fontSize: "13px", color: "#555", lineHeight: "1.8" }}>
+                      <div>
+                        <span style={{ color: "#c62828", fontWeight: "bold", fontSize: "20px" }}>●</span> 0–39
+                      </div>
+                      <div>
+                        <span style={{ color: "#f9a825", fontWeight: "bold", fontSize: "20px" }}>●</span> 40–79
+                      </div>
+                      <div>
+                        <span style={{ color: "#2e7d32", fontWeight: "bold", fontSize: "20px" }}>●</span> 80–100
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bars */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px", flex: 1 }}>
+                    {[
+                      { label: "Accuracy", value: scores?.AccuracyScore ?? 0 },
+                      { label: "Prosody", value: Roundoff(scores?.ProsodyScore) ?? 0 },
+                      { label: "Fluency", value: scores?.FluencyScore?? 0 },
+                      { label: "Completeness", value: scores?.CompletenessScore ?? 0 },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div style={labelStyle}>{label}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ ...barWrapper, flex: 1 }}>
+                            <div style={bar(value)} />
+                          </div>
+                          <div style={{ minWidth: 45, textAlign: "right", fontWeight: 500 }}>{value}/100</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {alignedResults.length > 0 && (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}>
+                      Word-Level Comparison (click a word to play it)
+                    </h3>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 20, marginBottom: 20 }}>
+                      <div style={{ color: "#d32f2f", fontWeight: "bold" }}>
+                        ❗ Mispronunciations: {mispronunciations.length}
+                      </div>
+                      <div style={{ color: "#f57c00", fontWeight: "bold" }}>
+                        ⏸️ Long Pauses: {longPauseCount}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap" }}>
+                      {alignedResults.map((w, i) => {
+                        const prevWord = spokenWordsRaw[w.spokenIndex - 1];
+                        const currWord = spokenWordsRaw[w.spokenIndex];
+                        let hasLongPause = false;
+                        if (prevWord && currWord) {
+                          const prevEnd = prevWord.Offset + prevWord.Duration;
+                          const currStart = currWord.Offset;
+                          hasLongPause = (currStart - prevEnd) / 10000 > 700;
+                        }
+
+                        const clickable = w.spokenIndex !== -1 && spokenWordsRaw[w.spokenIndex];
+
+                        return (
+                          <React.Fragment key={`${w.word}-${i}`}>
+                            {hasLongPause && (
+                              <div
+                                style={{
+                                  padding: "4px 8px",
+                                  backgroundColor: "#ffecb3",
+                                  color: "#5a6452ff",
+                                  borderRadius: "4px",
+                                  margin: "4px",
+                                  fontWeight: "bold",
+                                }}
+                                title="⏸ Long pause before this word (over 700ms gap)"
+                              >
+                                ⏸
+                              </div>
+                            )}
+                            <div
+                              onClick={() => clickable && playWord(spokenWordsRaw[w.spokenIndex])}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "4px",
+                                margin: "4px",
+                                backgroundColor: getColor(w.accuracy, "light"),
+                                color: getColor(w.accuracy, "dark"),
+                                cursor: clickable ? "pointer" : "default",
+                                opacity: clickable ? 1 : 0.7,
+                              }}
+                              title={`Word: ${w.word}\nAccuracy: ${w.accuracy || 0}${
+                                clickable ? "\n(Click to play this word)" : ""
+                              }`}
+                            >
+                              {w.word}
+                              {w.accuracy ? ` (${w.accuracy})` : ""}
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
+              <Button variant="outlined" onClick={handlePrevious} disabled={currentIndex === 0}>
+                ⬅ Previous
+              </Button>
+              <div>
+                <Button
+                  variant="outlined"
+                  onClick={handleNext}
+                  disabled={currentIndex === items.length - 1}
+                  style={{ marginRight: 10 }}
+                >
+                  Next ➡
+                </Button>
+                <Button variant="contained" color="error" onClick={onClose}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </Box>
+  </Modal>
+);
+
+  
 };
 
 export default AssessmentModal;
