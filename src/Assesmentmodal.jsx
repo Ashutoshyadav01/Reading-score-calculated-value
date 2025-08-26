@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
-import AudioPlayer from "react-h5-audio-player";
-import "react-h5-audio-player/lib/styles.css";
 import { CircularProgress, Button, Modal, Box } from "@mui/material";
+import { Tooltip, IconButton } from "@mui/material";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 const modalStyle = {
   position: "absolute",
@@ -24,15 +24,7 @@ const modalStyle = {
   },
 };
 
-const headerStyle = {
-  background: "linear-gradient(90deg, #1976d2, #42a5f5)",
-  color: "#fff",
-  padding: "16px 24px",
-  fontSize: "20px",
-  fontWeight: "bold",
-  borderTopLeftRadius: 6,
-  borderTopRightRadius: 6,
-};
+
 
 const bodyStyle = { padding: "24px" };
 const paragraphStyle = { fontSize: "15px", margin: "8px 0", color: "#333" };
@@ -40,13 +32,12 @@ const paragraphStyle = { fontSize: "15px", margin: "8px 0", color: "#333" };
 const AssessmentModal = ({ open, onClose, data }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [autoPlay, setAutoPlay] = useState(false);
+  const [wordToInvestigate, setWordToInvestigate] = useState("");
   const audioRef = useRef(null);
 
   const items = [
     {
-      type: "Average",
-      title: "👋 Hello",
-      text: "Welcome to your reading assessment!"
+      type: "Average"
     },
     ...Object.keys(data)
       .filter((key) => !isNaN(Number(key)))
@@ -82,8 +73,6 @@ const AssessmentModal = ({ open, onClose, data }) => {
     overall: (totals.overall / count).toFixed(2)
   };
 
-  // console.log("All Scores:", allScores);
-  console.log("Averages:", averages);
 
 
 
@@ -91,12 +80,12 @@ const AssessmentModal = ({ open, onClose, data }) => {
 
   const currentItem = items[currentIndex];
   const result = currentItem.azureResult;
-  const overall = result?.pronunciationScores?.overall;
+
   const hasError = !!currentItem.error || !!result?.error;
   const scores = items[currentIndex]?.azureResult?.
     rawJsonResult?.NBest[0]?.
     PronunciationAssessment;
-  console.log(JSON.stringify(scores), "scores")
+  //console.log(JSON.stringify(scores), "scores")
   const AverageProsody =
     items.reduce((acc, item) => {
       const score =
@@ -104,15 +93,15 @@ const AssessmentModal = ({ open, onClose, data }) => {
       return acc + (score ?? 0); // agar undefined ho to 0 lelo
     }, 0) / items.length;
 
-  console.log("Average Prosody:", AverageProsody);
+  //console.log("Average Prosody:", AverageProsody);
 
 
 
 
-  //console.log("scores",scores)
+  ////console.log("scores",scores)
   const raw = result?.rawJsonResult;
   const words = raw?.NBest?.[0]?.Words || [];
-  const confidence = raw?.NBest?.[0]?.Confidence ?? 0;
+
 
   const allPages = items.map((item) => item.recording_page);
   const sortedUniquePages = [...new Set(allPages)].sort((a, b) => a - b);
@@ -161,10 +150,15 @@ const AssessmentModal = ({ open, onClose, data }) => {
     setAutoPlay(true);
   };
 
-  const handleNext = () =>
+  const handleNext = () => {
+    //console.log(currentIndex)
     setCurrentIndex((prev) => Math.min(prev + 1, items.length - 1));
-  const handlePrevious = () =>
+    setWordToInvestigate(null);
+  }
+  const handlePrevious = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
+    setWordToInvestigate(null)
+  }
 
   const getColor = (score, variant = "dark") => {
     if (variant === "light") {
@@ -178,20 +172,7 @@ const AssessmentModal = ({ open, onClose, data }) => {
     }
   };
 
-  const barWrapper = {
-    background: "#e0e0e0",
-    borderRadius: "4px",
-    overflow: "hidden",
-    height: "18px",
-  };
-  const labelStyle = { marginBottom: "4px", fontWeight: 500 };
-  const bar = (width) => ({
-    width: `${width}%`,
-    backgroundColor: getColor(width),
-    height: "100%",
-    transition: "width 0.5s ease",
-    borderRadius: "4px",
-  });
+
 
   const mispronunciationThreshold = 60;
   const mispronunciations = spokenWordsRaw.filter(
@@ -212,27 +193,25 @@ const AssessmentModal = ({ open, onClose, data }) => {
   // === Word-level playback ===
   const playWord = (wordObj) => {
     if (!audioRef.current || !wordObj) return;
-    const audio = audioRef.current.audio.current;
-    if (!audio) return;
+
+    const audio = audioRef.current; // now directly the <audio> element
 
     const startTime = wordObj.Offset / 10_000_000; // seconds
     const endTime = (wordObj.Offset + wordObj.Duration) / 10_000_000;
 
-    // Clean any previous listeners to avoid stacking
-    const clean = () => audio.removeEventListener("timeupdate", stopListener);
-
+    // Clear any previous listeners
     const stopListener = () => {
       if (audio.currentTime >= endTime) {
         audio.pause();
-        clean();
+        audio.removeEventListener("timeupdate", stopListener);
       }
     };
 
-    clean(); // just in case
     audio.currentTime = startTime;
     audio.play();
     audio.addEventListener("timeupdate", stopListener);
   };
+
 
 
   return (
@@ -240,31 +219,60 @@ const AssessmentModal = ({ open, onClose, data }) => {
       <Box sx={modalStyle}>
         {currentItem.type === "Average" ? (
           <>
-            <div style={headerStyle}>{data.title}</div>
+            <div >{data.title}</div>
             <div>
               <h3 style={{ marginLeft: "10px" }}>Pronounciation score</h3>
               <div style={{ display: "flex", gap: "60px", marginLeft: "10px" }}>
                 <div>
-                  <p>
-                    Accuracy: <span style={{ color: getColor(averages.accuracy) }}>{Roundoff(averages.accuracy)}%</span>
+                  <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: "auto" }}>
+                    Accuracy:
+                    <span style={{ color: getColor(averages.accuracy) }}>
+                      {Roundoff(averages.accuracy)}%
+                    </span>
+                    <Tooltip title="Pronunciation accuracy of the speech. Accuracy indicates how closely the phonemes match a native speaker's pronunciation. Word and full text accuracy scores are aggregated from phoneme-level accuracy score.">
+                      <IconButton size="small">
+                        <InfoOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </p>
-                  <p>
-                    Fluency: <span style={{ color: getColor(averages.fluency) }}>{Roundoff(averages.fluency)}%</span>
+
+                  <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                    Fluency: <span style={{ color: getColor(averages.fluency) }}>{Roundoff(averages.fluency)}%
+
+                    </span>
+                    <Tooltip title="Fluency of the given speech. Fluency indicates how closely the speech matches a native speaker's use of silent breaks between words.">
+                      <IconButton size="small">
+                        <InfoOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+
                   </p>
                 </div>
 
                 <div>
-                  <p>
+                  <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
                     Completeness:{" "}
                     <span style={{ color: getColor(averages.completeness) }}>
                       {Roundoff(averages.completeness)}%
+
                     </span>
+                    <Tooltip title="Completeness of the speech, calculated by the ratio of pronounced words to the input reference text.">
+                      <IconButton size="small">
+                        <InfoOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+
                   </p>
 
-                  <p>
+                  <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
                     Prosody:{" "}
                     <span style={{ color: getColor(AverageProsody) }}>
                       {Roundoff(AverageProsody)}%
+                      <Tooltip title="Prosody of the given speech. Prosody indicates how nature of the given speech, including stress, intonation, speaking speed and rhythm.">
+                        <IconButton size="small">
+                          <InfoOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </span>
                   </p>
                 </div>
@@ -319,7 +327,7 @@ const AssessmentModal = ({ open, onClose, data }) => {
                     {items.slice(1).map((item, idx) => {
                       const score = item?.azureResult?.pronunciationScores?.overall ?? 0;
                       return (
-                        <tr key={idx}>
+                        <tr key={idx} onClick={()=>setCurrentIndex(idx+1)}>
                           {/* Page number */}
                           <td style={{ padding: "8px" }}>
                             <span>Page </span>
@@ -334,11 +342,12 @@ const AssessmentModal = ({ open, onClose, data }) => {
 
                             <div
                               style={{
-                                width: "100px",
+                                width: "300px",
                                 height: "8px",
                                 background: "#eee",
                                 borderRadius: "4px",
                                 overflow: "hidden",
+                                margin: "auto"
                               }}
                             >
                               <div
@@ -392,37 +401,24 @@ const AssessmentModal = ({ open, onClose, data }) => {
           </>
         ) : (
           <>
-            <div style={headerStyle}>
-              📝 Page{" "}
-              {isSequential
-                ? currentItem.recording_page + 1
-                : currentItem.recording_page === 0
-                  ? 1
-                  : currentItem.recording_page}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <strong onClick={()=>setCurrentIndex(0)}>{data.title} &gt; </strong>
+              <span> Page{" "}
+                {isSequential
+                  ? currentItem.recording_page + 1
+                  : currentItem.recording_page === 0
+                    ? 1
+                    : currentItem.recording_page}
+              </span>
             </div>
+
 
             <div style={bodyStyle}>
               <p style={paragraphStyle}>
-                <strong>File:</strong> {data.title}
+
               </p>
 
-              <AudioPlayer
-                ref={audioRef}
-                src={currentItem.recordingURL}
-                showJumpControls={false}
-                layout="horizontal"
-                autoPlay={autoPlay}
-                onEnded={handleEnd}
-                style={{
-                  marginBottom: 20,
-                  width: "100%",
-                  borderRadius: 10,
-                  padding: 10,
-                  background: "linear-gradient(90deg, #e3f2fd, #1692f9ff)",
-                  boxShadow: "0px 3px 10px rgba(25, 118, 210, 0.2)",
-                  border: "1px solid #198eeeff",
-                }}
-              />
+
 
               {hasError ? (
                 <p style={{ color: "#d32f2f", fontWeight: "bold" }}>
@@ -430,72 +426,101 @@ const AssessmentModal = ({ open, onClose, data }) => {
                 </p>
               ) : (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-                    {/* Circular Pronunciation Score */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{ position: "relative", display: "inline-flex" }}>
-                        <CircularProgress
-                          variant="determinate"
-                          value={overall ?? 0}
-                          size={100}
-                          thickness={5}
-                          style={{ color: getColor(overall ?? 0) }}
-                        />
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "50%",
-                            left: "50%",
-                            transform: "translate(-50%, -50%)",
-                            fontWeight: "bold",
-                            fontSize: "20px",
-                            color: "black",
-                          }}
-                        >
-                          {Roundoff(overall ?? 0)}
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 8, fontWeight: "bold", color: "#333" }}>
-                        Pronunciation Score
-                      </div>
-                      <div style={{ marginTop: 12, fontSize: "13px", color: "#555", lineHeight: "1.8" }}>
-                        <div>
-                          <span style={{ color: "#c62828", fontWeight: "bold", fontSize: "20px" }}>●</span> 0–39
-                        </div>
-                        <div>
-                          <span style={{ color: "#f9a825", fontWeight: "bold", fontSize: "20px" }}>●</span> 40–79
-                        </div>
-                        <div>
-                          <span style={{ color: "#2e7d32", fontWeight: "bold", fontSize: "20px" }}>●</span> 80–100
-                        </div>
-                      </div>
+                  <h3 style={{ marginLeft: "10px" }}>Pronounciation score</h3>
+                  <div style={{ display: "flex", justifyContent: "space-around", marginLeft: "10px" }}>
+                    <div >
+                      <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: "auto" }}>
+                        Accuracy:
+                        <span style={{ color: getColor(scores?.AccuracyScore) }}>
+                          {Roundoff(scores.AccuracyScore)}%
+                        </span>
+                        <Tooltip title="Pronunciation accuracy of the speech. Accuracy indicates how closely the phonemes match a native speaker's pronunciation. Word and full text accuracy scores are aggregated from phoneme-level accuracy score.">
+                          <IconButton size="small">
+                            <InfoOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </p>
+
+                      <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                        Fluency: <span style={{ color: getColor(scores.FluencyScore) }}>{Roundoff(scores?.FluencyScore)}%
+
+                        </span>
+                        <Tooltip title="Fluency of the given speech. Fluency indicates how closely the speech matches a native speaker's use of silent breaks between words.">
+                          <IconButton size="small">
+                            <InfoOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+
+                      </p>
                     </div>
 
-                    {/* Bars */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px", flex: 1 }}>
-                      {[
-                        { label: "Accuracy", value: scores?.AccuracyScore ?? 0 },
-                        { label: "Prosody", value: Roundoff(scores?.ProsodyScore) ?? 0 },
-                        { label: "Fluency", value: scores?.FluencyScore ?? 0 },
-                        { label: "Completeness", value: scores?.CompletenessScore ?? 0 },
-                      ].map(({ label, value }) => (
-                        <div key={label}>
-                          <div style={labelStyle}>{label}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ ...barWrapper, flex: 1 }}>
-                              <div style={bar(value)} />
-                            </div>
-                            <div style={{ minWidth: 45, textAlign: "right", fontWeight: 500 }}>{value}/100</div>
-                          </div>
-                        </div>
-                      ))}
+                    <div>
+                      <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                        Completeness:{" "}
+                        <span style={{ color: getColor(scores.CompletenessScore) }}>
+                          {Roundoff(scores.CompletenessScore)}%
+
+                        </span>
+                        <Tooltip title="Completeness of the speech, calculated by the ratio of pronounced words to the input reference text.">
+                          <IconButton size="small">
+                            <InfoOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+
+                      </p>
+
+                      <p style={{ display: "flex", alignItems: "center", gap: "6px", margin: 0 }}>
+                        Prosody:{" "}
+                        <span style={{ color: getColor(scores?.ProsodyScore) }}>
+                          {Roundoff(scores?.ProsodyScore)}%
+                          <Tooltip title="Prosody of the given speech. Prosody indicates how nature of the given speech, including stress, intonation, speaking speed and rhythm.">
+                            <IconButton size="small">
+                              <InfoOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </span>
+                      </p>
+                    </div>
+
+                    <div style={{ position: "relative", display: "inline-flex" }}>
+                      <CircularProgress
+                        variant="determinate"
+                        value={scores.PronScore ?? 0}
+                        size={100}
+                        thickness={10}
+                        style={{ color: getColor(scores?.PronScore ?? 0) }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          fontWeight: "bold",
+                          fontSize: "20px",
+                          color: "black",
+                        }}
+                      >
+                        {Roundoff(scores?.PronScore ?? 0)}
+                      </div>
+                    </div>
+                    <div >
+                      <div>
+                        <span style={{ color: "#c62828", fontWeight: "bold", fontSize: "20px" }}>●</span> 0–39
+                      </div>
+                      <div>
+                        <span style={{ color: "#f9a825", fontWeight: "bold", fontSize: "20px" }}>●</span> 40–79
+                      </div>
+                      <div>
+                        <span style={{ color: "#2e7d32", fontWeight: "bold", fontSize: "20px" }}>●</span> 80–100
+                      </div>
                     </div>
                   </div>
 
                   {alignedResults.length > 0 && (
                     <div style={{ marginTop: 24 }}>
                       <h3 style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}>
-                        Word-Level Comparison (click a word to play it)
+                        Word Level Details
                       </h3>
 
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 20, marginBottom: 20 }}>
@@ -538,7 +563,7 @@ const AssessmentModal = ({ open, onClose, data }) => {
                                 </div>
                               )}
                               <div
-                                onClick={() => clickable && playWord(spokenWordsRaw[w.spokenIndex])}
+                                onClick={() => clickable && setWordToInvestigate(spokenWordsRaw[w.spokenIndex])}
                                 style={{
                                   padding: "4px 8px",
                                   borderRadius: "4px",
@@ -548,20 +573,49 @@ const AssessmentModal = ({ open, onClose, data }) => {
                                   cursor: clickable ? "pointer" : "default",
                                   opacity: clickable ? 1 : 0.7,
                                 }}
-                                title={`Word: ${w.word}\nAccuracy: ${w.accuracy || 0}${clickable ? "\n(Click to play this word)" : ""
-                                  }`}
+                                title={`Word: ${w.word}\nAccuracy: ${w.accuracy || 0}${clickable ? "\n(Click to select this word)" : ""}`}
                               >
                                 {w.word}
                                 {w.accuracy ? ` (${w.accuracy})` : ""}
                               </div>
+
                             </React.Fragment>
                           );
                         })}
                       </div>
+                      {wordToInvestigate && (
+                        <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}>
+                          <span style={{ marginRight: "10px" }}>{wordToInvestigate?.Word}</span>
+                          <span
+                            style={{ color: "blue", cursor: "pointer", textDecoration: "underline", marginRight: "10px" }}
+                            onClick={() => playWord(wordToInvestigate)}
+                          >
+                            🔊 What you pronounced?
+                          </span>
+                          <span>Correct pronunciation</span>
+                        </div>
+                      )}
+
                     </div>
                   )}
                 </>
               )}
+              <audio
+                ref={audioRef}
+                src={currentItem.recordingURL}
+                controls
+                autoPlay={autoPlay}
+                onEnded={handleEnd}
+                style={{
+                  marginBottom: 20,
+                  width: "100%",
+                  borderRadius: 10,
+                  padding: 10,
+                  //background: "linear-gradient(90deg, #e3f2fd, #1692f9ff)",
+                  //boxShadow: "0px 3px 10px rgba(25, 118, 210, 0.2)",
+                  //border: "1px solid #198eeeff",
+                }}
+              />
 
               <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between" }}>
                 <Button variant="outlined" onClick={handlePrevious} disabled={currentIndex === 0}>
